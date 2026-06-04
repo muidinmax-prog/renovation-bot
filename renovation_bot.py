@@ -1,12 +1,11 @@
-import telebot
+import os
 import anthropic
 import json
 from datetime import datetime
 
-BOT_TOKEN   = "8918230367:AAFk3OmWdvFKroStBZWIvcB76G0m2Ij1LHs"
-OWNER_ID    = 7235430104
-CLAUDE_KEY  = "PASTE_YOUR_ANTHROPIC_KEY"
-
+BOT_TOKEN   = os.environ.get("BOT_TOKEN")
+OWNER_ID    = int(os.environ.get("OWNER_ID"))
+CLAUDE_KEY  = os.environ.get("CLAUDE_KEY")
 SYSTEM = """You are Alex, a friendly and professional virtual assistant for Reliable Home Renovation LLC based in Ohio.
 
 Your job is to collect lead information by following these exact steps in order:

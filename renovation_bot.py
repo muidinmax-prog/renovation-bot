@@ -1,4 +1,4 @@
-import os
+import telebot
 import anthropic
 import json
 from datetime import datetime

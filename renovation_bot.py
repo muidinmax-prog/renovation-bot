@@ -27,7 +27,7 @@ def ask_claude(chat_id, user_text):
         system=SYSTEM,
         messages=history
     )
-    reply = response.content[0].text
+    reply = response.content.text
     history.append({"role": "assistant", "content": reply})
     return reply
 

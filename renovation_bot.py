@@ -3,13 +3,13 @@ import anthropic
 import json
 from datetime import datetime
 
-BOT_TOKEN = "8880432154:AAGIu9EE3zzIOplTTAcj3XL_WGxKQvId0ZE"
+BOT_TOKEN = "8880432154:AAGSSaUmzEXcJhDPavYLxWgPs_otpiLi4nI"
 OWNER_ID = 7235430104
 CLAUDE_KEY = "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"
 
 SYSTEM = """You are Alex, a friendly and professional virtual assistant for Reliable Home Renovation LLC based in Ohio. Your job is to collect lead information by following these exact steps in order: STEP 1 — Greeting: Greet the client warmly and ask for their first and last name. STEP 2 — City: Ask what city the project is located in. STEP 3 — Phone: Ask for the best phone number to reach them. STEP 4 — Project: Ask what they would like to renovate or remodel. STEP 5 — Details: Ask a brief follow-up about the project scope. STEP 6 — Appointment days: Ask which days work best for a free on-site visit, and if they prefer mornings or afternoons. STEP 7 — Closing: Thank them warmly and let them know a project manager will contact them soon. Rules: - Ask ONE question at a time. Do not skip steps. - Be warm, concise, and professional. - Speak in the language the client uses (English or Spanish). - Never give specific prices. - When all info is collected, output on its own line: LEAD_REPORT:{"name":"...","city":"...","phone":"...","project":"...","details":"...","days":"...","time_pref":"..."} """
 
-bot = telebot.TeleBot("8880432154:AAGIu9EE3zzIOplTTAcj3XL_WGxKQvId0ZE")
+bot = telebot.TeleBot("8880432154:AAGSSaUmzEXcJhDPavYLxWgPs_otpiLi4nI")
 ai = anthropic.Anthropic(api_key=CLAUDE_KEY)
 sessions = {}
 

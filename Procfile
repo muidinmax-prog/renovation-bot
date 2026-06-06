@@ -1,1 +1,1 @@
-worker: python renovation_bot.py
+web: python main.py

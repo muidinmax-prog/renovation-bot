@@ -1,85 +1,64 @@
-import telebot
-import anthropic
-import json
-from datetime import datetime
+import os
+import httpx
+from fastapi import FastAPI, Request
 
-BOT_TOKEN = "8880432154:AAGSSaUmzEXcJhDPavYLxWgPs_otpiLi4nI"
-OWNER_ID = 7235430104
-CLAUDE_KEY = "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"
+app = FastAPI()
 
-SYSTEM = """You are Alex, a friendly and professional virtual assistant for Reliable Home Renovation LLC based in Ohio. Your job is to collect lead information by following these exact steps in order: STEP 1 — Greeting: Greet the client warmly and ask for their first and last name. STEP 2 — City: Ask what city the project is located in. STEP 3 — Phone: Ask for the best phone number to reach them. STEP 4 — Project: Ask what they would like to renovate or remodel. STEP 5 — Details: Ask a brief follow-up about the project scope. STEP 6 — Appointment days: Ask which days work best for a free on-site visit, and if they prefer mornings or afternoons. STEP 7 — Closing: Thank them warmly and let them know a project manager will contact them soon. Rules: - Ask ONE question at a time. Do not skip steps. - Be warm, concise, and professional. - Speak in the language the client uses (English or Spanish). - Never give specific prices. - When all info is collected, output on its own line: LEAD_REPORT:{"name":"...","city":"...","phone":"...","project":"...","details":"...","days":"...","time_pref":"..."} """
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
 
-bot = telebot.TeleBot("8880432154:AAGSSaUmzEXcJhDPavYLxWgPs_otpiLi4nI")
-ai = anthropic.Anthropic(api_key=CLAUDE_KEY)
-sessions = {}
 
-def get_history(chat_id):
-    if chat_id not in sessions:
-        sessions[chat_id] = []
-    return sessions[chat_id]
+async def send_telegram(text: str):
+    async with httpx.AsyncClient() as client:
+        await client.post(TELEGRAM_API_URL, json={
+            "chat_id": TELEGRAM_CHAT_ID,
+            "text": text,
+            "parse_mode": "HTML",
+        })
 
-def ask_claude(chat_id, user_text):
-    history = get_history(chat_id)
-    history.append({"role": "user", "content": user_text})
-    response = ai.messages.create(
-        model="claude-3-5-sonnet-20241022",
-        max_tokens=1000,
-        system=SYSTEM,
-        messages=history
-    )
-    reply = response.content.text
-    history.append({"role": "assistant", "content": reply})
-    return reply
 
-def send_lead_report(lead, chat_id):
-    now = datetime.now().strftime("%m/%d/%Y %I:%M %p")
-    report = (
-        f"📋 *NEW LEAD — Reliable Home Renovation*\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"🕐 {now}\n\n"
-        f"👤 *Name:* {lead.get('name','—')}\n"
-        f"📍 *City:* {lead.get('city','—')}\n"
-        f"📞 *Phone:* {lead.get('phone','—')}\n"
-        f"🔨 *Project:* {lead.get('project','—')}\n"
-        f"📝 *Details:* {lead.get('details','—')}\n"
-        f"📅 *Available days:* {lead.get('days','—')}\n"
-        f"🌅 *Preferred time:* {lead.get('time_pref','—')}\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"💬 Source: Telegram Bot\n"
-        f"🆔 Client chat ID: `{chat_id}`"
-    )
-    try:
-        bot.send_message(OWNER_ID, report, parse_mode="Markdown")
-    except Exception as e:
-        print(f"[ERROR] {e}")
+@app.post("/vapi-webhook")
+async def vapi_webhook(request: Request):
+    data = await request.json()
 
-@bot.message_handler(commands=["start","hello"])
-def handle_start(message):
-    sessions[message.chat.id] = []
-    bot.send_message(message.chat.id, "Административный бот активен и готов к приему отчетов.")
+    # Vapi присылает данные в поле message
+    message = data.get("message", {})
+    msg_type = message.get("type", "")
 
-@bot.message_handler(func=lambda m: True)
-def handle_message(message):
-    chat_id = message.chat.id
-    text = message.text.strip()
-    
-    print(f"[LOG] Получено сообщение: {text}")
-    
-    lead_data = None
-    
-    if text.startswith("LEAD_REPORT:"):
-        try:
-            lead_data = json.loads(text[len("LEAD_REPORT:"):])
-            send_lead_report(lead_data, chat_id)
-            return
-        except Exception as e:
-            print(f"[WARN] Ошибка разбора JSON: {e}")
-            bot.send_message(chat_id, f"Ошибка обработки отчета: {e}")
-            return
+    # Обрабатываем только событие окончания звонка
+    if msg_type != "end-of-call-report":
+        return {"status": "ignored"}
 
-    reply = ask_claude(chat_id, text)
-    bot.send_message(chat_id, reply)
+    # Извлекаем нужные поля
+    summary = message.get("summary", "")
+    transcript = message.get("transcript", "")
+    ended_reason = message.get("endedReason", "unknown")
+
+    # Формируем сообщение для Telegram
+    lines = [f"📞 <b>Звонок завершён</b> — причина: <code>{ended_reason}</code>"]
+
+    if summary:
+        lines.append(f"\n📝 <b>Краткое содержание:</b>\n{summary}")
+
+    if transcript and not summary:
+        # Показываем транскрипт только если нет summary, обрезаем до 3000 символов
+        short = transcript[:3000] + ("…" if len(transcript) > 3000 else "")
+        lines.append(f"\n📄 <b>Транскрипт:</b>\n{short}")
+
+    if not summary and not transcript:
+        lines.append("\n⚠️ Нет ни summary, ни транскрипта в отчёте.")
+
+    await send_telegram("\n".join(lines))
+    return {"status": "ok"}
+
+
+@app.get("/")
+async def health():
+    return {"status": "running"}
+
 
 if __name__ == "__main__":
-    print("✅ Bot is running...")
-    bot.infinity_polling()
+    import uvicorn
+    port = int(os.getenv("PORT", 8080))
+    uvicorn.run("main:app", host="0.0.0.0", port=port)

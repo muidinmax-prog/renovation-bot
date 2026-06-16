@@ -15,7 +15,7 @@ async def update_vapi_server_url():
     if not VAPI_SERVER_URL:
         print("[Vapi] VAPI_SERVER_URL не задан — пропускаю обновление.")
         return
-    
+        
     url = f"https://api.vapi.ai/assistant/{VAPI_ASSISTANT_ID}"
     headers = {
         "Authorization": f"Bearer {VAPI_API_KEY}",
@@ -45,10 +45,10 @@ async def send_telegram(text: str):
     if not token or not chat_id:
         print(f"[Telegram] ❌ Ошибка отправки: Проверьте переменные! TOKEN={bool(token)}, CHAT_ID={bool(chat_id)}")
         return
-
+        
     url = f"https://api.telegram.org/bot{token}/sendMessage"
-    
     print(f"[Telegram] Попытка отправить сообщение чату {chat_id}...")
+    
     async with httpx.AsyncClient() as client:
         resp = await client.post(url, json={
             "chat_id": chat_id,
@@ -67,29 +67,48 @@ async def vapi_webhook(request: Request):
     # Vapi присылает данные в поле message
     message = data.get("message", {})
     msg_type = message.get("type", "")
-    
     print(f"[Vapi Webhook] Получено событие типа: {msg_type}")
-
+    
     # Обрабатываем только событие окончания звонка
     if msg_type != "end-of-call-report":
         return {"status": "ignored"}
-
-    # Извлекаем нужные поля
-    summary = message.get("summary", "")
+        
+    # 1. Извлекаем базовые поля отчета
+    analysis = message.get("analysis", {})
+    summary = analysis.get("summary", "")
     transcript = message.get("transcript", "")
     ended_reason = message.get("endedReason", "unknown")
-
-    # Формируем сообщение для Telegram
-    lines = [f"📞 <b>Звонок завершён</b> — причина: <code>{ended_reason}</code>"]
+    
+    # 2. Вытаскиваем системный номер (с которого реально звонили)
+    call_data = message.get("call", {})
+    phone_caller_id = call_data.get("customer", {}).get("number", "Не определен")
+    
+    # 3. Вытаскиваем данные, которые ИИ собрал по нашему промту (из блока structuredData)
+    structured_data = analysis.get("structuredData", {})
+    name = structured_data.get("name", "Не указано")
+    city = structured_data.get("city", "Не указан")
+    spoken_phone = structured_data.get("spoken_phone", "Клиент не назвал номер")
+    
+    # Формируем красивое сообщение для Telegram
+    lines = [
+        "📞 <b>Новый лид обработан ИИ-ассистентом</b>",
+        f"👤 <b>Имя клиента:</b> {name}",
+        f"🏙 <b>Город проекта:</b> {city}",
+        f"📱 <b>Определённый номер (Caller ID):</b> <code>{phone_caller_id}</code>",
+        f"🗣 <b>Названный голосом номер:</b> <code>{spoken_phone}</code>",
+        f"🚪 <b>Причина завершения:</b> {ended_reason}"
+    ]
+    
     if summary:
         lines.append(f"\n📝 <b>Краткое содержание:</b>\n{summary}")
-    if transcript and not summary:
+    elif transcript:
         # Показываем транскрипт только если нет summary, обрезаем до 3000 символов
         short = transcript[:3000] + ("…" if len(transcript) > 3000 else "")
         lines.append(f"\n📄 <b>Транскрипт:</b>\n{short}")
+        
     if not summary and not transcript:
         lines.append("\n⚠️ Нет ни summary, ни транскрипта в отчёте.")
-
+        
     await send_telegram("\n".join(lines))
     return {"status": "ok"}
 
